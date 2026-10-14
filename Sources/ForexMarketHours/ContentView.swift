@@ -514,7 +514,7 @@ struct ContentView: View {
     }
 
     private var footer: some View {
-        Text("Hours follow the Babypips convention (UTC anchors; local times shift with daylight saving). Weekends closed Sat + Sun before 21:00 UTC.")
+        Text("Session hours use standard UTC anchors; local times shift with daylight saving. Weekends closed Sat + Sun before 21:00 UTC.")
             .font(.caption).foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity, alignment: .center)
     }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later — see LICENSE.
 import SwiftUI
 
-// MARK: - Session model (hours expressed in UTC, Babypips convention)
+// MARK: - Session model (hours expressed in standard UTC anchors)
 
 struct TradingSession: Identifiable, Hashable {
     let id: String

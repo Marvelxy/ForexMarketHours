@@ -1,7 +1,6 @@
 # Forex Market Hours
 
-A beautiful, interactive macOS visualizer for forex trading sessions — inspired by the
-[Babypips Forex Market Hours](https://www.babypips.com/tools/forex-market-hours) tool.
+A beautiful, interactive macOS visualizer for forex trading sessions.
 100% offline: all hours are computed locally, no network calls, no tracking.
 
 ![Forex Market Hours screenshot](docs/screenshot.png)
@@ -58,8 +57,8 @@ Resources/Info.plist
 .github/workflows/            # CI build + tagged-release DMG pipeline
 ```
 
-Session hours follow the Babypips convention (UTC anchors; local times shift
-with daylight saving). Weekends closed: all Saturday + Sunday before 21:00 UTC.
+Session hours use standard UTC anchors; local times shift
+with daylight saving. Weekends closed: all Saturday + Sunday before 21:00 UTC.
 
 ## License
 

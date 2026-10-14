@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:ForexMarketHours}",
+      "name": "Debug ForexMarketHours",
+      "target": "ForexMarketHours",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug ForexMarketHours"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:ForexMarketHours}",
+      "name": "Release ForexMarketHours",
+      "target": "ForexMarketHours",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release ForexMarketHours"
+    }
+  ]
+}
