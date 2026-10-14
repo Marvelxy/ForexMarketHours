@@ -6,12 +6,17 @@ import AppKit
 import UserNotifications
 
 // Shows banners even when the app is frontmost.
-final class ForegroundNotifyDelegate: NSObject, UNUserNotificationCenterDelegate {
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
+final class ForegroundNotifyDelegate: NSObject, UNUserNotificationCenterDelegate {    func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner])
     }
+}
+
+// Tick counter that never invalidates the view (plain var, not @Published),
+// so skipped background ticks cost zero redraw.
+final class BackgroundGate: ObservableObject {
+    var ticks = 0
 }
 
 // MARK: - Main view
@@ -28,6 +33,8 @@ struct ContentView: View {
     @State private var notifyDelegate = ForegroundNotifyDelegate()
     @State private var showDetail = false
     @State private var notifyBlocked = false
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var bgGate = BackgroundGate()
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -86,6 +93,12 @@ struct ContentView: View {
             refreshNotifyStatus()
         }
         .onReceive(tick) { t in
+            bgGate.ticks += 1
+            if scenePhase != .active {
+                // Background: wake every ~30s so open/close chimes and popups
+                // still fire, but otherwise let the CPU fully idle (App Nap).
+                guard bgGate.ticks % 30 == 0 else { return }
+            }
             now = t
             if isPlaying {
                 let cur = scrubUTCHour ?? liveUTCHour
@@ -790,13 +803,12 @@ struct SessionCard: View {
 struct PulseDot: View {
     let color: Color
     let active: Bool
-    @State private var pulse = false
+    // Static glow on purpose: the old repeatForever pulse kept the renderer
+    // at full frame rate forever and measurably cost battery.
     var body: some View {
         Circle().fill(active ? color : .gray.opacity(0.5))
             .frame(width: 9, height: 9)
-            .shadow(color: (active ? color : .clear).opacity(0.9), radius: pulse ? 8 : 3)
-            .scaleEffect(pulse && active ? 1.25 : 1.0)
-            .onAppear { withAnimation(.easeInOut(duration: 1.1).repeatForever()) { pulse = true } }
+            .shadow(color: active ? color.opacity(0.9) : .clear, radius: active ? 5 : 0)
     }
 }
 
