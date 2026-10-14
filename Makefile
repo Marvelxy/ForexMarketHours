@@ -1,7 +1,7 @@
 .PHONY: app app-native run run-native open clean install run-raw icon dmg dmg-native
 
 CONFIGURATION ?= release
-VERSION ?= 1.0.0
+VERSION ?= 1.1.0
 NATIVE_ARCH := $(shell uname -m)
 ICONSET = ForexMarketHours.iconset
 ICNS = Resources/AppIcon.icns
