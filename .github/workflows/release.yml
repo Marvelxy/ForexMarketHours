@@ -1,0 +1,44 @@
+name: Build & Release DMG
+
+# Pushing a tag like v1.0.0 builds the universal app + DMG and attaches it
+# to a GitHub Release (creating the release if needed).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build universal app
+        run: |
+          chmod +x Scripts/*.sh
+          make app CONFIGURATION=release
+
+      - name: Build DMG
+        run: |
+          make dmg VERSION="${GITHUB_REF_NAME#v}"
+          ls -la dist/
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.dmg --clobber
+          else
+            gh release create "$TAG" dist/*.dmg \
+              --title "Forex Market Hours $TAG" \
+              --generate-notes
+          fi

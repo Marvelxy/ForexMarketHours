@@ -1,0 +1,19 @@
+# SwiftPM + macOS build outputs
+.build/
+.build-universal/
+build/
+dist/
+dmg-root/
+
+# Generated app icon (regenerated via `make icon`)
+ForexMarketHours.iconset/
+Resources/AppIcon.icns
+
+# macOS cruft
+.DS_Store
+*.moved-aside
+
+# Xcode
+*.xcuserdata/
+*.xccheckout
+DerivedData/

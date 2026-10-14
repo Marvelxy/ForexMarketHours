@@ -1,0 +1,19 @@
+name: CI
+
+# Fast compile check on every push to main and every pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build app (native arch)
+        run: |
+          chmod +x Scripts/*.sh
+          make app-native CONFIGURATION=release
+          ls -la build/ForexMarketHours.app
