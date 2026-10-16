@@ -1,7 +1,10 @@
 name: Build & Release DMG
 
-# Pushing a tag like v1.0.0 builds the universal app + DMG and attaches it
-# to a GitHub Release (creating the release if needed).
+# Pushing a tag like v1.0.0 builds the universal app + DMG, generates the
+# Sparkle appcast, and attaches both to a GitHub Release (creating it if
+# needed). The app's SUFeedURL points at
+# https://github.com/Marvelxy/ForexMarketHours/releases/latest/download/appcast.xml
+# so every release must include an up-to-date appcast.xml.
 on:
   push:
     tags: ["v*"]
@@ -20,6 +23,23 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Marketing version from the tag; monotonic build number from the run
+          # so Sparkle (which compares CFBundleVersion) always sees progress.
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${{ github.run_number }}" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" Resources/Info.plist
+          # Fail fast if the Sparkle signing key was never installed (see README "Updates").
+          if grep -q "REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY" Resources/Info.plist; then
+            echo "::error::SUPublicEDKey is still the placeholder. Run Sparkle's generate_keys, put the public key in Resources/Info.plist, and retry."
+            exit 1
+          fi
+          if [ -z "${{ secrets.SPARKLE_PRIVATE_KEY }}" ]; then
+            echo "::error::SPARKLE_PRIVATE_KEY secret is missing. Export the EdDSA private key (generate_keys -x) into the repo secret and retry."
+            exit 1
+          fi
+
       - name: Build universal app
         run: |
           chmod +x Scripts/*.sh
@@ -30,15 +50,33 @@ jobs:
           make dmg VERSION="${GITHUB_REF_NAME#v}"
           ls -la dist/
 
+      - name: Generate Sparkle appcast
+        env:
+          TAG: ${{ github.ref_name }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          BIN="$(find . -path "*artifacts/sparkle/Sparkle/bin/generate_appcast" -type f | head -n 1)"
+          test -n "$BIN" || { echo "::error::generate_appcast not found in SPM artifacts"; exit 1; }
+          rm -rf sparkle-feed && mkdir -p sparkle-feed
+          cp dist/*.dmg sparkle-feed/
+          DMG_BASENAME="$(basename sparkle-feed/*.dmg .dmg)"
+          printf '# Forex Market Hours %s\n\nSee the GitHub release notes for details.\n' "$TAG" > "sparkle-feed/${DMG_BASENAME}.md"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$BIN" --ed-key-file - \
+            --download-url-prefix "https://github.com/Marvelxy/ForexMarketHours/releases/download/${TAG}/" \
+            --embed-release-notes \
+            --link "https://github.com/Marvelxy/ForexMarketHours" \
+            sparkle-feed/
+          ls -la sparkle-feed/
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.dmg --clobber
+            gh release upload "$TAG" dist/*.dmg sparkle-feed/appcast.xml --clobber
           else
-            gh release create "$TAG" dist/*.dmg \
+            gh release create "$TAG" dist/*.dmg sparkle-feed/appcast.xml \
               --title "Forex Market Hours $TAG" \
               --generate-notes
           fi

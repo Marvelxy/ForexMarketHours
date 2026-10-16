@@ -1,5 +1,5 @@
 // Forex Market Hours — interactive forex session visualizer for macOS.
-// Copyright (C) 2026 Marvelxy
+// Copyright (C) 2026 Marvelous Akpotu (Marvelxy)
 // SPDX-License-Identifier: GPL-3.0-or-later — see LICENSE.
 import SwiftUI
 
