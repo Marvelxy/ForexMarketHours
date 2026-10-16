@@ -9,9 +9,13 @@ let package = Package(
     products: [
         .executable(name: "ForexMarketHours", targets: ["ForexMarketHours"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0")
+    ],
     targets: [
         .executableTarget(
             name: "ForexMarketHours",
+            dependencies: ["Sparkle"],
             path: "Sources/ForexMarketHours",
             swiftSettings: [
                 .swiftLanguageMode(.v5)

@@ -1,7 +1,9 @@
 # Forex Market Hours
 
 A beautiful, interactive macOS visualizer for forex trading sessions.
-100% offline: all hours are computed locally, no network calls, no tracking.
+Market hours are computed locally — no account, no tracking. The only
+network use is checking for app updates (Sparkle, about once a day or when
+you choose "Check for Updates…").
 
 ![Forex Market Hours screenshot](docs/screenshot.png)
 
@@ -30,6 +32,30 @@ Runs on Apple Silicon and Intel (universal binary), macOS 14+.
 > Unsigned developer build: on first launch, right-click the app → Open
 > (or allow it in System Settings → Privacy & Security).
 
+## Updates
+
+The app updates itself via [Sparkle](https://sparkle-project.org/):
+
+- **Check for Updates…** — in the app menu (Forex Market Hours →
+  Check for Updates…), in Settings (⌘,), or via the About button in the app.
+- Automatic checks run about once a day; toggle them in Settings.
+- Releases are published on the
+  [Releases](https://github.com/Marvelxy/ForexMarketHours/releases) page —
+  each release ships the DMG plus the `appcast.xml` the updater reads.
+
+Signing keys (already set up): the EdDSA keypair lives in the maintainer's
+login keychain, the public key is in `Resources/Info.plist` (`SUPublicEDKey`),
+and the private key is stored as the `SPARKLE_PRIVATE_KEY` repo secret for CI.
+If the private key is ever lost, rotate it (see
+[Sparkle docs](https://sparkle-project.org/documentation/#rotating-signing-keys))
+and update both the plist and the secret — never commit the private key.
+
+Then cut a release with `git tag v1.2.0 && git push origin v1.2.0` — CI stamps
+the version/build number, signs the update, and uploads the DMG + appcast.
+
+> Production updates require a Developer ID signature + notarization; the
+> local `make app` build uses an ad-hoc signature (fine for development).
+
 ## Build from source
 
 Requires Xcode 16+ (Swift 6) on macOS.
@@ -46,7 +72,9 @@ make install      # copy the bundle into /Applications
 ```
 Package.swift                  # SwiftPM executable, macOS 14+
 Sources/ForexMarketHours/
-  ForexMarketHoursApp.swift    # @main app + window
+  ForexMarketHoursApp.swift    # @main app + window, Sparkle updater + Settings
+  Updater.swift                # Sparkle wiring, Check-for-Updates views, AppInfo
+  AboutView.swift              # About panel (author, version, update controls)
   MarketData.swift             # sessions, overlaps, UTC math, liquidity
   ContentView.swift            # timeline, cards, alerts, notifications
 Scripts/
@@ -62,5 +90,5 @@ with daylight saving. Weekends closed: all Saturday + Sunday before 21:00 UTC.
 
 ## License
 
-Copyright (C) 2026 Marvelxy — GNU General Public License v3.0 or later.
+Copyright (C) 2026 Marvelous Akpotu (Marvelxy) — GNU General Public License v3.0 or later.
 See [LICENSE](LICENSE). The DMG ships with a copy of the license.

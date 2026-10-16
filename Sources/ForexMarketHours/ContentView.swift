@@ -1,9 +1,10 @@
 // Forex Market Hours — interactive forex session visualizer for macOS.
-// Copyright (C) 2026 Marvelxy
+// Copyright (C) 2026 Marvelous Akpotu (Marvelxy)
 // SPDX-License-Identifier: GPL-3.0-or-later — see LICENSE.
 import SwiftUI
 import AppKit
 import UserNotifications
+import Sparkle
 
 // Shows banners even when the app is frontmost.
 final class ForegroundNotifyDelegate: NSObject, UNUserNotificationCenterDelegate {    func userNotificationCenter(_ center: UNUserNotificationCenter,
@@ -22,6 +23,10 @@ final class BackgroundGate: ObservableObject {
 // MARK: - Main view
 
 struct ContentView: View {
+    /// Sparkle updater, injected by the App for the About sheet's
+    /// "Check for Updates…" button. Nil in previews.
+    let updater: SPUUpdater?
+    @State private var showAbout = false
     @State private var now = Date()
     @State private var scrubUTCHour: Double? = nil   // nil == LIVE
     @State private var isPlaying = false
@@ -88,6 +93,19 @@ struct ContentView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDetail)
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showAbout) {
+            if let updater {
+                AboutView(updater: updater)
+            } else {
+                // Previews / updater-less hosts: still show the essentials.
+                VStack(spacing: 8) {
+                    Text("Forex Market Hours").font(.headline)
+                    Text("© 2026 Marvelous Akpotu (Marvelxy)")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                .padding(24)
+            }
+        }
         .onAppear {
             UNUserNotificationCenter.current().delegate = notifyDelegate
             refreshNotifyStatus()
@@ -303,6 +321,13 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(isLive)
+                    Button {
+                        showAbout = true
+                    } label: {
+                        Label("About", systemImage: "info.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
                 if notifyBlocked {
                     Text("Popups blocked — allow in System Settings → Notifications → Forex Market Hours")
@@ -392,17 +417,34 @@ struct ContentView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            TimelineView(
-                now: now,
-                zone: zone,
-                effUTCHour: effUTCHour,
-                isLive: isLive,
-                selectedID: $selectedID,
-                scrubUTCHour: $scrubUTCHour,
-                hoverWallHour: $hoverWallHour,
-                onStopPlaying: { isPlaying = false }
-            )
-            .frame(height: 214)
+            ZStack {
+                TimelineView(
+                    now: now,
+                    zone: zone,
+                    effUTCHour: effUTCHour,
+                    isLive: isLive,
+                    marketClosed: MarketData.marketClosed(at: effDate),
+                    selectedID: $selectedID,
+                    scrubUTCHour: $scrubUTCHour,
+                    hoverWallHour: $hoverWallHour,
+                    onStopPlaying: { isPlaying = false }
+                )
+                .frame(height: 214)
+                // Weekends: the spot market is closed, so grey the map out
+                // rather than showing live-looking colored bars.
+                .saturation(MarketData.marketClosed(at: effDate) ? 0 : 1)
+                .opacity(MarketData.marketClosed(at: effDate) ? 0.45 : 1)
+                .allowsHitTesting(true)
+                if MarketData.marketClosed(at: effDate) {
+                    Label("MARKET CLOSED — reopens Sunday 21:00 UTC with Sydney", systemImage: "moon.zzz.fill")
+                        .font(.callout.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.black.opacity(0.65), in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                        .allowsHitTesting(false)
+                }
+            }
             HStack(spacing: 14) {
                 ForEach(MarketData.sessions) { s in
                     HStack(spacing: 5) {
@@ -447,7 +489,7 @@ struct ContentView: View {
     }
 
     private func detailPanel(_ s: TradingSession) -> some View {
-        let open = s.isOpen(atUTCHour: effUTCHour)
+        let open = !MarketData.marketClosed(at: effDate) && s.isOpen(atUTCHour: effUTCHour)
         let delta = s.hoursToNextChange(fromUTCHour: effUTCHour)
         return HStack(spacing: 18) {
             RoundedRectangle(cornerRadius: 10)
@@ -502,7 +544,7 @@ struct ContentView: View {
     private var overlapStrip: some View {
         HStack(spacing: 14) {
             ForEach(MarketData.overlaps) { ov in
-                let active = ov.isActive(atUTCHour: effUTCHour)
+                let active = !MarketData.marketClosed(at: effDate) && ov.isActive(atUTCHour: effUTCHour)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Image(systemName: active ? "bolt.fill" : "bolt")
@@ -527,9 +569,17 @@ struct ContentView: View {
     }
 
     private var footer: some View {
-        Text("Session hours use standard UTC anchors; local times shift with daylight saving. Weekends closed Sat + Sun before 21:00 UTC.")
-            .font(.caption).foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .center)
+        HStack(spacing: 8) {
+            Text("Session hours use standard UTC anchors; local times shift with daylight saving. Weekends closed Sat + Sun before 21:00 UTC.")
+            Button("About") { showAbout = true }
+                .buttonStyle(.link)
+                .font(.caption)
+            Text("·")
+            Text(AppInfo.versionString)
+                .monospacedDigit()
+        }
+        .font(.caption).foregroundStyle(.tertiary)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
@@ -540,6 +590,8 @@ struct TimelineView: View {
     let zone: DisplayZone
     let effUTCHour: Double
     let isLive: Bool
+    /// When true (weekend), skip live-looking progress shimmer on the bars.
+    var marketClosed = false
     @Binding var selectedID: String?
     @Binding var scrubUTCHour: Double?
     @Binding var hoverWallHour: Double?
@@ -615,7 +667,7 @@ struct TimelineView: View {
                             RoundedRectangle(cornerRadius: 9)
                                 .fill(LinearGradient(colors: [s.color, s.color.opacity(0.55)], startPoint: .leading, endPoint: .trailing))
                                 .shadow(color: s.color.opacity(selectedID == s.id ? 0.8 : 0.35), radius: selectedID == s.id ? 10 : 5)
-                            if s.isOpen(atUTCHour: effUTCHour) {
+                            if !marketClosed, s.isOpen(atUTCHour: effUTCHour) {
                                 // elapsed shimmer: brighter elapsed portion
                                 GeometryReader { _ in
                                     let frac = elapsedFraction(session: s, wallOpen: a)
@@ -757,7 +809,8 @@ struct SessionCard: View {
     let selected: Bool
 
     var body: some View {
-        let open = session.isOpen(atUTCHour: effUTCHour)
+        // Weekends: the whole market is shut, so every session reads closed.
+        let open = !MarketData.marketClosed(at: effDate) && session.isOpen(atUTCHour: effUTCHour)
         let delta = session.hoursToNextChange(fromUTCHour: effUTCHour)
         let frac: Double = open
             ? session.elapsedHours(atUTCHour: effUTCHour) / session.lengthHours
