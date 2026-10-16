@@ -9,9 +9,17 @@ import Sparkle
 /// About this app: identity, version, author, update controls.
 struct AboutView: View {
     let updater: SPUUpdater
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Spacer()
+                Button("Close") { dismiss() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
+            }
             HStack(spacing: 12) {
                 Image(systemName: "globe.americas.fill")
                     .font(.system(size: 44))
