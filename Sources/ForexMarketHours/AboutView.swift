@@ -9,17 +9,9 @@ import Sparkle
 /// About this app: identity, version, author, update controls.
 struct AboutView: View {
     let updater: SPUUpdater
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Spacer()
-                Button("Close") { dismiss() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .keyboardShortcut(.cancelAction)
-            }
             HStack(spacing: 12) {
                 Image(systemName: "globe.americas.fill")
                     .font(.system(size: 44))
@@ -82,7 +74,7 @@ struct AboutView: View {
 
             Spacer(minLength: 0)
         }
-        .padding(20)
-        .frame(width: 420)
+        // No padding/size here: call sites (page section, Settings) provide it.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
