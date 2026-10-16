@@ -28,7 +28,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           # Marketing version from the tag; monotonic build number from the run
           # so Sparkle (which compares CFBundleVersion) always sees progress.
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${{ github.run_number }}" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${{ github.run_number }}" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" Resources/Info.plist
           # Fail fast if the Sparkle signing key was never installed (see README "Updates").
           if grep -q "REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY" Resources/Info.plist; then
