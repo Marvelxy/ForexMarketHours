@@ -22,6 +22,7 @@ struct ForexMarketHoursApp: App {
         }
         Settings {
             AboutView(updater: updaterManager.updater)
+                .padding(20)
         }
     }
 }

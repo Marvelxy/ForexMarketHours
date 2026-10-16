@@ -26,7 +26,6 @@ struct ContentView: View {
     /// Sparkle updater, injected by the App for the About sheet's
     /// "Check for Updates…" button. Nil in previews.
     let updater: SPUUpdater?
-    @State private var showAbout = false
     @State private var now = Date()
     @State private var scrubUTCHour: Double? = nil   // nil == LIVE
     @State private var isPlaying = false
@@ -72,6 +71,7 @@ struct ContentView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                         }
                         overlapStrip
+                        aboutSection
                         footer
                     }
                     .padding(16)
@@ -93,19 +93,6 @@ struct ContentView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showDetail)
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showAbout) {
-            if let updater {
-                AboutView(updater: updater)
-            } else {
-                // Previews / updater-less hosts: still show the essentials.
-                VStack(spacing: 8) {
-                    Text("Forex Market Hours").font(.headline)
-                    Text("© 2026 Marvelous Akpotu (Marvelxy)")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-                .padding(24)
-            }
-        }
         .onAppear {
             UNUserNotificationCenter.current().delegate = notifyDelegate
             refreshNotifyStatus()
@@ -321,13 +308,6 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(isLive)
-                    Button {
-                        showAbout = true
-                    } label: {
-                        Label("About", systemImage: "info.circle")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
                 if notifyBlocked {
                     Text("Popups blocked — allow in System Settings → Notifications → Forex Market Hours")
@@ -568,12 +548,31 @@ struct ContentView: View {
         }
     }
 
+    // MARK: About (inline on-page section)
+
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ABOUT")
+                .font(.caption.bold()).foregroundStyle(.secondary)
+                .tracking(1.5)
+            if let updater {
+                AboutView(updater: updater)
+            } else {
+                // Previews / updater-less hosts: still show the essentials.
+                VStack(spacing: 8) {
+                    Text("Forex Market Hours").font(.headline)
+                    Text("© 2026 Marvelous Akpotu (Marvelxy)")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .glassCard()
+    }
+
     private var footer: some View {
         HStack(spacing: 8) {
             Text("Session hours use standard UTC anchors; local times shift with daylight saving. Weekends closed Sat + Sun before 21:00 UTC.")
-            Button("About") { showAbout = true }
-                .buttonStyle(.link)
-                .font(.caption)
             Text("·")
             Text(AppInfo.versionString)
                 .monospacedDigit()
