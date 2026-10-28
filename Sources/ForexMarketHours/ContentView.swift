@@ -49,10 +49,13 @@ struct ContentView: View {
     private var effWallHour: Double { zone.wallHour(fromUTCHour: effUTCHour, reference: now) }
 
     private var effDate: Date {
+        date(forUTCHour: effUTCHour)
+    }
+
+    private func date(forUTCHour h: Double) -> Date {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
-        let sod = cal.startOfDay(for: now)
-        return sod.addingTimeInterval(effUTCHour * 3600)
+        return cal.startOfDay(for: now).addingTimeInterval(h * 3600)
     }
 
     var body: some View {
@@ -109,9 +112,9 @@ struct ContentView: View {
                 let cur = scrubUTCHour ?? liveUTCHour
                 let next = (cur + 0.25).truncatingRemainder(dividingBy: 24) // 15 market-min / sec
                 scrubUTCHour = next
-                checkSessionTransitions(atUTCHour: next, at: t)
+                checkSessionTransitions(at: date(forUTCHour: next))
             } else if scrubUTCHour == nil {
-                checkSessionTransitions(atUTCHour: liveUTCHour, at: t)
+                checkSessionTransitions(at: t)
             }
         }
     }
@@ -129,8 +132,8 @@ struct ContentView: View {
         }
     }
 
-    private func stateSnapshot(atUTCHour h: Double) -> [String: Bool] {
-        Dictionary(uniqueKeysWithValues: MarketData.sessions.map { ($0.id, $0.isOpen(atUTCHour: h)) })
+    private func stateSnapshot(at date: Date) -> [String: Bool] {
+        Dictionary(uniqueKeysWithValues: MarketData.sessions.map { ($0.id, $0.isOpen(at: date)) })
     }
 
     /// Permission state for the macOS banner popup. If the user blocked it in
@@ -170,15 +173,15 @@ struct ContentView: View {
     }
 
     /// Banner notification per session transition (time-sensitive so it breaks through Focus).
-    private func notifySession(_ s: TradingSession, opened: Bool, atUTCHour h: Double) {
+    private func notifySession(_ s: TradingSession, opened: Bool, at date: Date) {
         let content = UNMutableNotificationContent()
-        let delta = s.hoursToNextChange(fromUTCHour: h)
+        let delta = s.hoursToNextChange(from: date)
         if opened {
             content.title = "\(s.city) session is open"
             content.body = "Closes in \(MarketData.countdownString(hours: delta)) · \(s.pairs.joined(separator: ", ")) in focus"
         } else {
             content.title = "\(s.city) session closed"
-            content.body = "Reopens in \(MarketData.countdownString(hours: delta)) · \(zone.rangeString(openUTC: s.openUTC, closeUTC: s.closeUTC, reference: now)) \(zone.label)"
+            content.body = "Reopens in \(MarketData.countdownString(hours: delta)) · \(zone.rangeString(for: s, reference: date)) \(zone.label)"
         }
         content.interruptionLevel = .timeSensitive
         let req = UNNotificationRequest(identifier: "forex-\(s.id)-\(opened ? "open" : "close")",
@@ -186,19 +189,19 @@ struct ContentView: View {
         UNUserNotificationCenter.current().add(req)
     }
 
-    private func checkSessionTransitions(atUTCHour h: Double, at date: Date) {
-        let current = stateSnapshot(atUTCHour: h)
+    private func checkSessionTransitions(at date: Date) {
+        let current = stateSnapshot(at: date)
         defer { lastOpenState = current }
         guard !lastOpenState.isEmpty, alertsEnabled, !MarketData.marketClosed(at: date) else { return }
         var opened = false, closed = false
         for s in MarketData.sessions {
             if lastOpenState[s.id] == false && current[s.id] == true {
                 opened = true
-                notifySession(s, opened: true, atUTCHour: h)
+                notifySession(s, opened: true, at: date)
             }
             if lastOpenState[s.id] == true && current[s.id] == false {
                 closed = true
-                notifySession(s, opened: false, atUTCHour: h)
+                notifySession(s, opened: false, at: date)
             }
         }
         if opened { playAlert(opened: true) }
@@ -291,7 +294,7 @@ struct ContentView: View {
                         if isPlaying {
                             if scrubUTCHour == nil { scrubUTCHour = liveUTCHour }
                             // seed baseline so the first play tick can't false-trigger
-                            lastOpenState = stateSnapshot(atUTCHour: scrubUTCHour ?? liveUTCHour)
+                            lastOpenState = stateSnapshot(at: effDate)
                         }
                     } label: {
                         Label(isPlaying ? "Pause" : "Play", systemImage: isPlaying ? "pause.fill" : "play.fill")
@@ -301,7 +304,7 @@ struct ContentView: View {
                     Button {
                         scrubUTCHour = nil; isPlaying = false
                         // reseed: jumping from a preview hour back to live must not chime
-                        lastOpenState = stateSnapshot(atUTCHour: MarketData.utcHour(of: now))
+                        lastOpenState = stateSnapshot(at: now)
                     } label: {
                         Label("Live", systemImage: "dot.radiowaves.left.and.right")
                     }
@@ -325,9 +328,14 @@ struct ContentView: View {
         return String(format: "%02d:%02d", h, m)
     }
 
+    private var nextMarketOpenLabel: String {
+        guard let next = MarketData.nextMarketOpen(after: effDate) else { return "market closed" }
+        return "reopens \(zone.weekdayString(for: next)) \(zone.hourLabel(zone.wallHour(of: next))) \(zone.label)"
+    }
+
     private var marketPill: some View {
         let closed = MarketData.marketClosed(at: effDate)
-        let openCount = MarketData.openSessions(atUTCHour: effUTCHour).count
+        let openCount = MarketData.openSessions(at: effDate).count
         return HStack(spacing: 6) {
             Circle().fill(closed ? Color.red : Color.green).frame(width: 8, height: 8)
                 .shadow(color: closed ? .red : .green, radius: 6)
@@ -344,7 +352,7 @@ struct ContentView: View {
 
     private var statusStrip: some View {
         HStack(spacing: 14) {
-            let liq = MarketData.liquidity(atUTCHour: effUTCHour)
+            let liq = MarketData.liquidity(at: effDate)
             let closed = MarketData.marketClosed(at: effDate)
             HStack(spacing: 10) {
                 Image(systemName: "waveform.path.ecg")
@@ -359,13 +367,13 @@ struct ContentView: View {
             }
             Divider().frame(height: 30)
             if closed {
-                Label("Weekend — the market reopens Sunday 21:00 UTC with Sydney.", systemImage: "moon.zzz.fill")
+                Label("Market closed — \(nextMarketOpenLabel)", systemImage: "moon.zzz.fill")
                     .font(.callout).foregroundStyle(.orange)
-            } else if let ov = MarketData.activeOverlaps(atUTCHour: effUTCHour).max(by: { $0.intensity < $1.intensity }) {
+            } else if let ov = MarketData.activeOverlaps(at: effDate).max(by: { $0.intensity < $1.intensity }) {
                 Label("\(ov.name) overlap is live — \(ov.note.lowercased()).", systemImage: "bolt.fill")
                     .font(.callout).foregroundStyle(.yellow)
             } else {
-                let open = MarketData.openSessions(atUTCHour: effUTCHour).map(\.city).joined(separator: " · ")
+                let open = MarketData.openSessions(at: effDate).map(\.city).joined(separator: " · ")
                 Label(open.isEmpty ? "Between sessions — quiet patch." : "\(open) in session.",
                       systemImage: "clock.fill")
                     .font(.callout).foregroundStyle(.secondary)
@@ -402,6 +410,7 @@ struct ContentView: View {
                     now: now,
                     zone: zone,
                     effUTCHour: effUTCHour,
+                    effDate: effDate,
                     isLive: isLive,
                     marketClosed: MarketData.marketClosed(at: effDate),
                     selectedID: $selectedID,
@@ -416,7 +425,7 @@ struct ContentView: View {
                 .opacity(MarketData.marketClosed(at: effDate) ? 0.45 : 1)
                 .allowsHitTesting(true)
                 if MarketData.marketClosed(at: effDate) {
-                    Label("MARKET CLOSED — reopens Sunday 21:00 UTC with Sydney", systemImage: "moon.zzz.fill")
+                    Label("MARKET CLOSED — \(nextMarketOpenLabel)", systemImage: "moon.zzz.fill")
                         .font(.callout.bold())
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
@@ -446,7 +455,7 @@ struct ContentView: View {
     private func hoverSummary(wall: Double) -> String {
         let off = zone.wallHour(fromUTCHour: 0, reference: now)
         let utc = (wall - off + 48).truncatingRemainder(dividingBy: 24)
-        let open = MarketData.openSessions(atUTCHour: utc)
+        let open = MarketData.openSessions(at: date(forUTCHour: utc))
         return open.isEmpty ? "no session" : open.map(\.city).joined(separator: "+")
     }
 
@@ -456,8 +465,8 @@ struct ContentView: View {
         HStack(spacing: 12) {
             ForEach(MarketData.sessions) { s in
                 SessionCard(
-                    session: s, now: now, zone: zone,
-                    effUTCHour: effUTCHour, effDate: effDate,
+                    session: s, zone: zone,
+                    effDate: effDate,
                     selected: selectedID == s.id
                 )
                 .onTapGesture {
@@ -469,8 +478,8 @@ struct ContentView: View {
     }
 
     private func detailPanel(_ s: TradingSession) -> some View {
-        let open = !MarketData.marketClosed(at: effDate) && s.isOpen(atUTCHour: effUTCHour)
-        let delta = s.hoursToNextChange(fromUTCHour: effUTCHour)
+        let open = !MarketData.marketClosed(at: effDate) && s.isOpen(at: effDate)
+        let delta = s.hoursToNextChange(from: effDate)
         return HStack(spacing: 18) {
             RoundedRectangle(cornerRadius: 10)
                 .fill(LinearGradient(colors: [s.color, s.color.opacity(0.4)], startPoint: .top, endPoint: .bottom))
@@ -487,7 +496,7 @@ struct ContentView: View {
                 Text(s.blurb).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     InfoChip(title: "LOCAL", value: localRange(s))
-                    InfoChip(title: zone.label.uppercased(), value: zone.rangeString(openUTC: s.openUTC, closeUTC: s.closeUTC, reference: now))
+                    InfoChip(title: zone.label.uppercased(), value: zone.rangeString(for: s, reference: effDate))
                     InfoChip(title: open ? "CLOSES IN" : "OPENS IN", value: MarketData.countdownString(hours: delta), accent: s.color)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("TOP PAIRS").font(.caption2.bold()).foregroundStyle(.secondary)
@@ -508,15 +517,11 @@ struct ContentView: View {
     }
 
     private func localRange(_ s: TradingSession) -> String {
-        guard let tz = TimeZone(identifier: s.timeZoneID) else { return "--" }
-        let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "ha"
-        func at(_ utc: Double) -> String {
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = TimeZone(identifier: "UTC")!
-            let d = cal.startOfDay(for: now).addingTimeInterval(utc * 3600)
-            return f.string(from: d).lowercased().replacingOccurrences(of: " ", with: "")
+        let f = DateFormatter(); f.timeZone = s.timeZone; f.dateFormat = "ha"
+        func at(_ date: Date) -> String {
+            f.string(from: date).lowercased().replacingOccurrences(of: " ", with: "")
         }
-        return "\(at(s.openUTC)) – \(at(s.closeUTC))"
+        return "\(at(s.openDate(on: effDate))) – \(at(s.closeDate(on: effDate)))"
     }
 
     // MARK: Overlaps + footer
@@ -524,7 +529,7 @@ struct ContentView: View {
     private var overlapStrip: some View {
         HStack(spacing: 14) {
             ForEach(MarketData.overlaps) { ov in
-                let active = !MarketData.marketClosed(at: effDate) && ov.isActive(atUTCHour: effUTCHour)
+                let active = !MarketData.marketClosed(at: effDate) && ov.isActive(at: effDate)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Image(systemName: active ? "bolt.fill" : "bolt")
@@ -536,7 +541,7 @@ struct ContentView: View {
                                 .background(Color.yellow, in: Capsule())
                         }
                     }
-                    Text("\(zone.hourLabel(zone.wallHour(fromUTCHour: ov.startUTC, reference: now))) – \(zone.hourLabel(zone.wallHour(fromUTCHour: ov.endUTC, reference: now))) \(zone.label)")
+                    Text("\(MarketData.rangeString(for: ov, in: zone, reference: effDate)) \(zone.label)")
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     Text(ov.note).font(.caption).foregroundStyle(.secondary)
                 }
@@ -572,7 +577,7 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Text("Session hours use standard UTC anchors; local times shift with daylight saving. Weekends closed Sat + Sun before 21:00 UTC.")
+            Text("Session hours are anchored to each market's local time and converted with daylight saving. Weekend runs close at New York's Friday close and reopen at Sydney's Monday open.")
             Text("·")
             Text(AppInfo.versionString)
                 .monospacedDigit()
@@ -588,6 +593,7 @@ struct TimelineView: View {
     let now: Date
     let zone: DisplayZone
     let effUTCHour: Double
+    let effDate: Date
     let isLive: Bool
     /// When true (weekend), skip live-looking progress shimmer on the bars.
     var marketClosed = false
@@ -635,22 +641,27 @@ struct TimelineView: View {
                 }
                 // overlap bands
                 ForEach(MarketData.overlaps) { ov in
-                    let a = zone.wallHour(fromUTCHour: ov.startUTC, reference: now)
-                    let b = zone.wallHour(fromUTCHour: ov.endUTC, reference: now)
-                    ForEach(wallSegments(a, b), id: \.self) { seg in
+                    let active = !marketClosed && ov.isActive(at: effDate)
+                    let segments = MarketData.displaySegments(for: ov, in: zone, reference: now)
+                    let bandColor = active
+                        ? Color.yellow.opacity(0.05 + 0.02 * Double(ov.intensity))
+                        : Color.gray.opacity(0.04)
+                    ForEach(segments, id: \.self) { seg in
+                        let bandWidth = max(0, x(seg.upperBound) - x(seg.lowerBound))
+                        let bandX = (x(seg.lowerBound) + x(seg.upperBound)) / 2
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.yellow.opacity(0.05 + 0.02 * Double(ov.intensity)))
-                            .frame(width: max(0, x(seg.upperBound) - x(seg.lowerBound)),
-                                   height: lanesHeight + 8)
-                            .position(x: (x(seg.lowerBound) + x(seg.upperBound)) / 2,
-                                      y: topPad + lanesHeight / 2 - 4)
+                            .fill(bandColor)
+                            .frame(width: bandWidth, height: lanesHeight + 8)
+                            .position(x: bandX, y: topPad + lanesHeight / 2 - 4)
                     }
                 }
                 // session lanes
                 ForEach(Array(MarketData.sessions.enumerated()), id: \.element.id) { idx, s in
                     let y = topPad + CGFloat(idx) * (laneHeight + laneGap)
-                    let a = zone.wallHour(fromUTCHour: s.openUTC, reference: now)
-                    let b = zone.wallHour(fromUTCHour: s.closeUTC, reference: now)
+                    let a = zone.wallHour(fromUTCHour: s.openUTCHour(on: now), reference: now)
+                    let b = zone.wallHour(fromUTCHour: s.closeUTCHour(on: now), reference: now)
+                    let open = !marketClosed && s.isOpen(at: effDate)
+                    let accent = open ? s.color : Color.gray
                     // track
                     RoundedRectangle(cornerRadius: 9)
                         .fill(.white.opacity(0.05))
@@ -664,12 +675,13 @@ struct TimelineView: View {
                         let isCloseEdge = abs(seg.upperBound - b) < 0.001
                         ZStack {
                             RoundedRectangle(cornerRadius: 9)
-                                .fill(LinearGradient(colors: [s.color, s.color.opacity(0.55)], startPoint: .leading, endPoint: .trailing))
-                                .shadow(color: s.color.opacity(selectedID == s.id ? 0.8 : 0.35), radius: selectedID == s.id ? 10 : 5)
-                            if !marketClosed, s.isOpen(atUTCHour: effUTCHour) {
+                                .fill(LinearGradient(colors: [accent, accent.opacity(open ? 0.55 : 0.3)], startPoint: .leading, endPoint: .trailing))
+                                .shadow(color: open ? accent.opacity(selectedID == s.id ? 0.8 : 0.35) : .clear,
+                                        radius: selectedID == s.id ? 10 : 5)
+                            if open {
                                 // elapsed shimmer: brighter elapsed portion
                                 GeometryReader { _ in
-                                    let frac = elapsedFraction(session: s, wallOpen: a)
+                                    let frac = elapsedFraction(session: s)
                                     RoundedRectangle(cornerRadius: 9)
                                         .fill(.white.opacity(0.18))
                                         .frame(width: bw * CGFloat(frac))
@@ -700,17 +712,17 @@ struct TimelineView: View {
                         // boundary pins: glowing filled dot = opens, hollow dot = closes
                         if isOpenEdge {
                             Circle()
-                                .fill(s.color)
+                                .fill(accent)
                                 .frame(width: 9, height: 9)
                                 .overlay(Circle().fill(.white).frame(width: 3.5, height: 3.5))
-                                .shadow(color: s.color.opacity(0.9), radius: 5)
+                                .shadow(color: open ? accent.opacity(0.9) : .clear, radius: 5)
                                 .position(x: bx, y: y + laneHeight / 2)
                         }
                         if isCloseEdge {
                             Circle()
                                 .fill(Color(red: 0.05, green: 0.07, blue: 0.14))
                                 .frame(width: 9, height: 9)
-                                .overlay(Circle().stroke(s.color, lineWidth: 2.5))
+                                .overlay(Circle().stroke(accent, lineWidth: 2.5))
                                 .position(x: bx + bw, y: y + laneHeight / 2)
                         }
                     }
@@ -718,11 +730,17 @@ struct TimelineView: View {
                 // session labels in their own gutter, left of the chart
                 ForEach(Array(MarketData.sessions.enumerated()), id: \.element.id) { idx, s in
                     let y = topPad + CGFloat(idx) * (laneHeight + laneGap)
+                    let open = !marketClosed && s.isOpen(at: effDate)
+                    let cityColor: Color = selectedID == s.id
+                        ? .white
+                        : (open ? Color.gray.opacity(0.85) : Color.gray.opacity(0.5))
                     HStack(spacing: 7) {
-                        Circle().fill(s.color).frame(width: 8, height: 8)
+                        Circle()
+                            .fill(open ? s.color : .gray.opacity(0.5))
+                            .frame(width: 8, height: 8)
                         Text(s.city)
                             .font(.callout.bold())
-                            .foregroundStyle(selectedID == s.id ? .white : .secondary)
+                            .foregroundStyle(cityColor)
                     }
                     .frame(width: gutter - 12, alignment: .trailing)
                     .contentShape(Rectangle())
@@ -791,8 +809,8 @@ struct TimelineView: View {
         return [s...24, 0...e]
     }
 
-    private func elapsedFraction(session s: TradingSession, wallOpen: Double) -> Double {
-        let elapsed = s.elapsedHours(atUTCHour: effUTCHour)
+    private func elapsedFraction(session s: TradingSession) -> Double {
+        let elapsed = s.elapsedHours(at: effDate)
         return min(1, max(0, elapsed / s.lengthHours))
     }
 }
@@ -801,18 +819,16 @@ struct TimelineView: View {
 
 struct SessionCard: View {
     let session: TradingSession
-    let now: Date
     let zone: DisplayZone
-    let effUTCHour: Double
     let effDate: Date
     let selected: Bool
 
     var body: some View {
         // Weekends: the whole market is shut, so every session reads closed.
-        let open = !MarketData.marketClosed(at: effDate) && session.isOpen(atUTCHour: effUTCHour)
-        let delta = session.hoursToNextChange(fromUTCHour: effUTCHour)
+        let open = !MarketData.marketClosed(at: effDate) && session.isOpen(at: effDate)
+        let delta = session.hoursToNextChange(from: effDate)
         let frac: Double = open
-            ? session.elapsedHours(atUTCHour: effUTCHour) / session.lengthHours
+            ? session.elapsedHours(at: effDate) / session.lengthHours
             : 1 - delta / (24 - session.lengthHours)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
@@ -825,7 +841,7 @@ struct SessionCard: View {
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background((open ? Color.green : Color.gray).opacity(0.15), in: Capsule())
             }
-            Text(zone.rangeString(openUTC: session.openUTC, closeUTC: session.closeUTC, reference: now))
+            Text(zone.rangeString(for: session, reference: effDate))
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .monospacedDigit()
             Text("\(open ? "Closes" : "Opens") in \(MarketData.countdownString(hours: delta))")

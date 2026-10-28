@@ -10,7 +10,8 @@ you choose "Check for Updates…").
 ## Features
 
 - **24-hour session map** — Sydney, Tokyo, Frankfurt, London and New York lanes with
-  overlap bands, live NOW marker, and true open/close times pinned to every bar
+  overlap bands, live NOW marker, true open/close times pinned to every bar, and
+  inactive sessions greyed out
 - **Scrub & play** — drag the timeline to preview any hour, or press Play to animate
   the market forward (15 market-minutes per second)
 - **Timezone converter** — Local, UTC, Sydney, Tokyo, Frankfurt, London, New York
@@ -85,8 +86,10 @@ Resources/Info.plist
 .github/workflows/            # CI build + tagged-release DMG pipeline
 ```
 
-Session hours use standard UTC anchors; local times shift
-with daylight saving. Weekends closed: all Saturday + Sunday before 21:00 UTC.
+Session hours are anchored to each market's local time (e.g. London
+08:00–17:00), so UTC offsets and daylight saving are handled automatically.
+The trading week closes at New York's Friday close and reopens at Sydney's
+Monday open.
 
 ## License
 
