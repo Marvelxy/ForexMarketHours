@@ -5,7 +5,10 @@ Market hours are computed locally — no account, no tracking. The only
 network use is checking for app updates (Sparkle, about once a day or when
 you choose "Check for Updates…").
 
+**Forex Market Hours**
 ![Forex Market Hours screenshot](docs/market-hours.png)
+
+**Candle Interval Timer with Notification**
 ![Forex Market Hours screenshot](docs/timer.png)
 
 ## Features
