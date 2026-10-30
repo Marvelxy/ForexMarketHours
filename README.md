@@ -22,6 +22,8 @@ you choose "Check for Updates…").
   session open/close, in live and play modes
 - **Liquidity gauge, overlap strip** (incl. "Best to trade" London × New York),
   weekend-closed state
+- **Interval timer tab** — a clock-aligned repeating beep at 1–60 minute
+  intervals with a selectable macOS alert sound and start/pause/reset controls
 
 ## Install
 
@@ -78,6 +80,7 @@ Sources/ForexMarketHours/
   AboutView.swift              # About panel (author, version, update controls)
   MarketData.swift             # sessions, overlaps, UTC math, liquidity
   ContentView.swift            # timeline, cards, alerts, notifications
+  TimerView.swift              # repeating interval timer + beep sounds
 Scripts/
   build-app.sh                 # universal .app bundler + ad-hoc sign
   make-dmg.sh                  # drag-to-install DMG builder
