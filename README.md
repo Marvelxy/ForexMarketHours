@@ -53,8 +53,10 @@ If the private key is ever lost, rotate it (see
 [Sparkle docs](https://sparkle-project.org/documentation/#rotating-signing-keys))
 and update both the plist and the secret — never commit the private key.
 
-Then cut a release with `git tag v1.2.0 && git push origin v1.2.0` — CI stamps
-the version/build number, signs the update, and uploads the DMG + appcast.
+Every push to `main` (including merges) automatically cuts the next patch
+release: CI stamps the version/build number, signs the update, and uploads the
+DMG + appcast. To publish a specific version manually, push a tag such as
+`git tag v1.4.0 && git push origin v1.4.0`.
 
 > Production updates require a Developer ID signature + notarization; the
 > local `make app` build uses an ad-hoc signature (fine for development).
@@ -86,7 +88,7 @@ Scripts/
   make-dmg.sh                  # drag-to-install DMG builder
   make-icon.swift              # generates AppIcon.icns (CoreGraphics, no assets needed)
 Resources/Info.plist
-.github/workflows/            # CI build + tagged-release DMG pipeline
+.github/workflows/            # CI build + auto-release DMG pipeline
 ```
 
 Session hours are anchored to each market's local time (e.g. London
