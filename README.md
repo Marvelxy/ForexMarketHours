@@ -5,7 +5,8 @@ Market hours are computed locally — no account, no tracking. The only
 network use is checking for app updates (Sparkle, about once a day or when
 you choose "Check for Updates…").
 
-![Forex Market Hours screenshot](docs/screenshot.png)
+![Forex Market Hours screenshot](docs/market-hours.png)
+![Forex Market Hours screenshot](docs/timer.png)
 
 ## Features
 
@@ -22,6 +23,8 @@ you choose "Check for Updates…").
   session open/close, in live and play modes
 - **Liquidity gauge, overlap strip** (incl. "Best to trade" London × New York),
   weekend-closed state
+- **Interval timer tab** — a clock-aligned repeating beep at 1–60 minute
+  intervals with a selectable macOS alert sound and start/pause/reset controls
 
 ## Install
 
@@ -51,8 +54,10 @@ If the private key is ever lost, rotate it (see
 [Sparkle docs](https://sparkle-project.org/documentation/#rotating-signing-keys))
 and update both the plist and the secret — never commit the private key.
 
-Then cut a release with `git tag v1.2.0 && git push origin v1.2.0` — CI stamps
-the version/build number, signs the update, and uploads the DMG + appcast.
+Every push to `main` (including merges) automatically cuts the next patch
+release: CI stamps the version/build number, signs the update, and uploads the
+DMG + appcast. To publish a specific version manually, push a tag such as
+`git tag v1.4.0 && git push origin v1.4.0`.
 
 > Production updates require a Developer ID signature + notarization; the
 > local `make app` build uses an ad-hoc signature (fine for development).
@@ -78,12 +83,13 @@ Sources/ForexMarketHours/
   AboutView.swift              # About panel (author, version, update controls)
   MarketData.swift             # sessions, overlaps, UTC math, liquidity
   ContentView.swift            # timeline, cards, alerts, notifications
+  TimerView.swift              # repeating interval timer + beep sounds
 Scripts/
   build-app.sh                 # universal .app bundler + ad-hoc sign
   make-dmg.sh                  # drag-to-install DMG builder
   make-icon.swift              # generates AppIcon.icns (CoreGraphics, no assets needed)
 Resources/Info.plist
-.github/workflows/            # CI build + tagged-release DMG pipeline
+.github/workflows/            # CI build + auto-release DMG pipeline
 ```
 
 Session hours are anchored to each market's local time (e.g. London

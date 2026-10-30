@@ -1,33 +1,64 @@
 name: Build & Release DMG
 
-# Pushing a tag like v1.0.0 builds the universal app + DMG, generates the
-# Sparkle appcast, and attaches both to a GitHub Release (creating it if
-# needed). The app's SUFeedURL points at
+# Every push to main (i.e. every merged PR) publishes a release automatically,
+# using the next patch version after the newest v* tag. Pushing a v* tag
+# manually also builds that exact version. The app's SUFeedURL points at
 # https://github.com/Marvelxy/ForexMarketHours/releases/latest/download/appcast.xml
 # so every release must include an up-to-date appcast.xml.
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
   contents: write
+
+# Serialise releases so two quick merges can't race for the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Toolchain
         run: |
           xcodebuild -version
           swift --version
 
-      - name: Stamp version from tag
+      - name: Resolve version
+        id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          # Marketing version from the tag; monotonic build number from the run
-          # so Sparkle (which compares CFBundleVersion) always sees progress.
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            LATEST="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+            if [[ -z "$LATEST" ]]; then
+              VERSION="1.0.0"
+            else
+              BASE="${LATEST#v}"
+              MAJOR="${BASE%%.*}"
+              REST="${BASE#*.}"
+              MINOR="${REST%%.*}"
+              PATCH="${REST#*.}"
+              PATCH="${PATCH%%-*}"
+              VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $VERSION (tag v$VERSION)"
+
+      - name: Stamp version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Marketing version from the tag/main-push calculation; monotonic
+          # build number from the run so Sparkle always sees progress.
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion ${{ github.run_number }}" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" Resources/Info.plist
           # Fail fast if the Sparkle signing key was never installed (see README "Updates").
@@ -47,12 +78,12 @@ jobs:
 
       - name: Build DMG
         run: |
-          make dmg VERSION="${GITHUB_REF_NAME#v}"
+          make dmg VERSION="${{ steps.version.outputs.version }}"
           ls -la dist/
 
       - name: Generate Sparkle appcast
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.version.outputs.tag }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           BIN="$(find . -path "*artifacts/sparkle/Sparkle/bin/generate_appcast" -type f | head -n 1)"
@@ -71,12 +102,13 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/*.dmg sparkle-feed/appcast.xml --clobber
           else
             gh release create "$TAG" dist/*.dmg sparkle-feed/appcast.xml \
+              --target "$GITHUB_SHA" \
               --title "Forex Market Hours $TAG" \
               --generate-notes
           fi
