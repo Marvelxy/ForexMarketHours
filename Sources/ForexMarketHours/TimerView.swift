@@ -189,10 +189,15 @@ struct IntervalTimerView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
 
-                    Button("Reset") { reset() }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .disabled(!isRunning && pausedRemaining == 0 && beeps == 0)
+                    Button {
+                        stop()
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.red)
+                    .disabled(!isRunning && pausedRemaining == 0)
                 }
             }
 
@@ -276,7 +281,7 @@ struct IntervalTimerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("The timer runs while this tab is open.")
                     .font(.callout.bold())
-                Text("Beeps follow the clock: a 5-minute interval fires at :00, :05, :10 and so on, so pressing Start simply picks up the time left in the current block. If the Mac sleeps, the timer resumes without firing missed beeps in a burst.")
+                Text("Beeps follow the clock: a 5-minute interval fires at :00, :05, :10 and so on, so pressing Start simply picks up the time left in the current block. Pause holds the countdown; Stop ends monitoring and clears the beep count. If the Mac sleeps, the timer resumes without firing missed beeps in a burst.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -307,7 +312,7 @@ struct IntervalTimerView: View {
         }
     }
 
-    private func reset() {
+    private func stop() {
         isRunning = false
         pausedRemaining = 0
         deadline = .distantFuture

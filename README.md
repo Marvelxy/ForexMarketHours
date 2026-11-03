@@ -27,7 +27,7 @@ you choose "Check for Updates…").
 - **Liquidity gauge, overlap strip** (incl. "Best to trade" London × New York),
   weekend-closed state
 - **Interval timer tab** — a clock-aligned repeating beep at 1–60 minute
-  intervals with a selectable macOS alert sound and start/pause/reset controls
+  intervals with a selectable macOS alert sound and start/pause/stop controls
 
 ## Install
 
